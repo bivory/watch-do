@@ -1,0 +1,18 @@
+# Mac files
+.DS_Store
+
+# Leiningen
+.lein-repl-history
+
+# vim swap
+*.swp
+*.swo
+
+# Leiningen auto generation
+classes/
+lib/
+autodoc/
+target/
+doc/
+deps/
+native/
