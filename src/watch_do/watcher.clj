@@ -35,6 +35,18 @@
       (swap! watch-stats merge {:watcher watcher :fs fs})
       watcher)))
 
+(defn- get-file-parent-directory
+  [fs file]
+  (let [parent (.getParentFile (.toFile file))]
+    (if (nil? parent)
+      (.getPath fs "." (make-array String 0))
+      (.toPath parent))))
+
+(defn- file?
+  [path]
+  (let [f (.toFile path)]
+    (.isFile f)))
+
 (defn- handle-watch-events
   [watch-key handlers]
   (let [events (.pollEvents watch-key)]
@@ -79,10 +91,10 @@
 
 (defn watch-path
   "Start watching a path, and call the handlers if files
-  are created/modified/deleted in that directory.
-  If the watcher thread is not started, this function automatically
-  starts it. The handlers are given via keyword args, currently supported
-  keywords are `:create`, `:modify`, and `:delete`."
+   are created/modified/deleted in that directory.
+   If the watcher thread is not started, this function automatically
+   starts it. The handlers are given via keyword args, currently supported
+   keywords are `:create`, `:modify`, and `:delete`."
   [pathname & {:as handlers}]
   (if (= (count handlers) 0)
     (throw (IllegalArgumentException. "No handlers specified."))
@@ -92,9 +104,14 @@
           watch-events (->> handlers
                             (map (comp kw-to-event first))
                             into-array)
-          watch-key (.register path
-                               watcher
-                               watch-events)]
+          watch-dir (if (file? path)
+                      (let [parent (get-file-parent-directory fs path)]
+                        (if (nil? parent)
+                          (throw (IllegalArgumentException. (str "Bad path: " pathname)))
+                          parent))
+                      path)
+          k (println "watching" path watch-dir)
+          watch-key (.register watch-dir watcher watch-events)]
       (swap! watch-stats
              assoc-in
              [:watching-paths path]

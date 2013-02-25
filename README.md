@@ -28,6 +28,6 @@ Download from https://github.com/bivory/watch-do
 
 ## License
 
-Copyright © 2013 FIXME
+Copyright © 2013 Bryan Ivory
 
 Distributed under the Eclipse Public License, the same as Clojure.
