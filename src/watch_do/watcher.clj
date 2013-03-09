@@ -110,7 +110,7 @@
                           (throw (IllegalArgumentException. (str "Bad path: " pathname)))
                           parent))
                       path)
-          k (println "watching" path watch-dir)
+          ;;k (println "watching" path watch-dir)
           watch-key (.register watch-dir watcher watch-events)]
       (swap! watch-stats
              assoc-in

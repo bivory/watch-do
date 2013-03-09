@@ -1,7 +1,6 @@
 (ns watch-do.core-test
-  (:use clojure.test
+  (:use midje.sweet
         watch-do.core))
 
-(deftest a-test
-  (testing "FIXME, I fail."
-    (is (= 0 1))))
+(fact "A simple test is true"
+      true => true)
