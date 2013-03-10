@@ -10,17 +10,21 @@
 (defn cb
   "Test helper that handles the callback when a watched path changes."
   [check ev ctx]
-  ;;(println ev ctx)
-  (swap! check (constantly {:ev ev :path (.toString ctx)})))
+  ;;(println "saw" ev ctx)
+  (let [cb (:cb @check)]
+    (deliver cb {:ev ev :path (.toString ctx)})))
+
+(defn set-watching!
+  [check]
+  (swap! check (constantly {:cb (promise)})))
 
 (defn watching-for
   "Test helper that verifies that the change event is the expended event."
   [check parent-path ev path]
   ;;(println "watching for" ev path)
-  (Thread/sleep 15000)
-  ;;(println "saw" (:ev @check) (str parent-path (:path @check)))
-  (and (= (:ev @check) ev)
-       (= (str parent-path (:path @check)) path)))
+  (let [cb (:cb @check)]
+    (and (= (:ev @cb) ev)
+         (= (str parent-path (:path @cb)) path))))
 
 (facts
       (let [check (atom {})
@@ -28,6 +32,9 @@
             file (str path (fs/temp-name "tmp"))]
 
         "A user can unwatch a directory"
+        ;; TODO need to use a timeout
+        (comment
+        (set-watching! check)
         (watch-path path
                     :create (partial cb check)
                     :modify (partial cb check)
@@ -35,7 +42,7 @@
         (unwatch-path path)
         (fs/mkdir dir)
         (watching-for check path :create dir) => false
-        (fs/delete-dir dir)
+        (fs/delete-dir dir))
 
         "A user can watch a directory for changes"
         (watch-path path
@@ -44,18 +51,22 @@
                     :delete (partial cb check))
 
         "Creating a directory will be noticed"
+        (set-watching! check)
         (fs/mkdir dir)
         (watching-for check path :create dir) => true
 
         "Deleting a directory will be noticed"
+        (set-watching! check)
         (fs/delete-dir dir)
         (watching-for check path :delete dir) => true
 
         "Creating a file will be noticed"
+        (set-watching! check)
         (fs/touch file)
         (watching-for check path :create file) => true
 
         "Deleting a file will be noticed"
+        (set-watching! check)
         (fs/delete file)
         (watching-for check path :delete file) => true
 
