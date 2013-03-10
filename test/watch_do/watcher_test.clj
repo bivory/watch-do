@@ -22,28 +22,40 @@
   (and (= (:ev @check) ev)
        (= (str parent-path (:path @check)) path)))
 
-(fact "A user can watch a directory for changes"
+(facts
       (let [check (atom {})
             dir (str path (fs/temp-name "tmp-dir"))
             file (str path (fs/temp-name "tmp"))]
+
+        "A user can unwatch a directory"
+        (watch-path path
+                    :create (partial cb check)
+                    :modify (partial cb check)
+                    :delete (partial cb check))
+        (unwatch-path path)
+        (fs/mkdir dir)
+        (watching-for check path :create dir) => false
+        (fs/delete-dir dir)
+
+        "A user can watch a directory for changes"
         (watch-path path
                     :create (partial cb check)
                     :modify (partial cb check)
                     :delete (partial cb check))
 
-        ;; Create
+        "Creating a directory will be noticed"
         (fs/mkdir dir)
         (watching-for check path :create dir) => true
 
-        ;; Delete
+        "Deleting a directory will be noticed"
         (fs/delete-dir dir)
         (watching-for check path :delete dir) => true
 
-        ;; Create File
+        "Creating a file will be noticed"
         (fs/touch file)
         (watching-for check path :create file) => true
 
-        ;; Delete File
+        "Deleting a file will be noticed"
         (fs/delete file)
         (watching-for check path :delete file) => true
 
