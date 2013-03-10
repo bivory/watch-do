@@ -1,7 +1,7 @@
 (ns watch-do.watcher-test
-  (:use midje.sweet
-        watch-do.watcher)
-  (:require [me.raynes.fs :as fs]))
+  (:use midje.sweet)
+  (:require [me.raynes.fs :as fs]
+            [watch-do.watcher :as watcher]))
 
 (def path "test/tmp/")
 ;; Create the testing directory if it doesn't exist.
@@ -28,83 +28,83 @@
          (= (str parent-path (:path @cb)) path))))
 
 (facts "About watching directories"
-      (let [check (atom {})
-            dir (str path (fs/temp-name "tmp-dir"))
-            file (str path (fs/temp-name "tmp"))]
+       (let [check (atom {})
+             dir (str path (fs/temp-name "directory-watch-dir"))
+             file (str path (fs/temp-name "directory-watch-file"))]
 
-        "A user can unwatch a directory"
-        (set-watching! check)
-        (watch-path path
-                    :create (partial cb check)
-                    :modify (partial cb check)
-                    :delete (partial cb check))
-        (unwatch-path path)
-        (fs/mkdir dir)
-        (watching-for check path :create dir) => false
-        (fs/delete-dir dir)
+         "A user can unwatch a directory"
+         (set-watching! check)
+         (watcher/watch path
+                        :create (partial cb check)
+                        :modify (partial cb check)
+                        :delete (partial cb check))
+         (watcher/unwatch path)
+         (fs/mkdir dir)
+         (watching-for check path :create dir) => false
+         (fs/delete-dir dir)
 
-        "A user can watch a directory for changes"
-        (watch-path path
-                    :create (partial cb check)
-                    :modify (partial cb check)
-                    :delete (partial cb check))
+         "A user can watch a directory for changes"
+         (watcher/watch path
+                        :create (partial cb check)
+                        :modify (partial cb check)
+                        :delete (partial cb check))
 
-        "Creating a directory will be noticed"
-        (set-watching! check)
-        (fs/mkdir dir)
-        (watching-for check path :create dir) => true
+         "Creating a directory will be noticed"
+         (set-watching! check)
+         (fs/mkdir dir)
+         (watching-for check path :create dir) => true
 
-        "Deleting a directory will be noticed"
-        (set-watching! check)
-        (fs/delete-dir dir)
-        (watching-for check path :delete dir) => true
+         "Deleting a directory will be noticed"
+         (set-watching! check)
+         (fs/delete-dir dir)
+         (watching-for check path :delete dir) => true
 
-        "Creating a file will be noticed"
-        (set-watching! check)
-        (fs/touch file)
-        (watching-for check path :create file) => true
+         "Creating a file will be noticed"
+         (set-watching! check)
+         (fs/touch file)
+         (watching-for check path :create file) => true
 
-        "Deleting a file will be noticed"
-        (set-watching! check)
-        (fs/delete file)
-        (watching-for check path :delete file) => true
+         "Deleting a file will be noticed"
+         (set-watching! check)
+         (fs/delete file)
+         (watching-for check path :delete file) => true
 
-        (unwatch-path path)))
+         (watcher/unwatch path)))
 
 (facts "About watching files"
-      (let [check (atom {})
-            file (str path (fs/temp-name "tmp"))]
+       (let [check (atom {})
+             file (str path (fs/temp-name "file-watch-file"))]
 
-        "A user can unwatch a file"
-        (set-watching! check)
-        (watch-path file
-                    :create (partial cb check)
-                    :modify (partial cb check)
-                    :delete (partial cb check))
-        (unwatch-path file)
-        (fs/touch file)
-        (watching-for check path :create file) => false
-        (fs/delete file)
+         "A user can unwatch a file"
+         (set-watching! check)
+         (watcher/watch file
+                        :create (partial cb check)
+                        :modify (partial cb check)
+                        :delete (partial cb check))
+         (watcher/unwatch file)
+         (fs/touch file)
+         (watching-for check file :create file) => false
+         (fs/delete file)
 
-        "A user can watch a file for changes"
-        (watch-path file
-                    :create (partial cb check)
-                    :modify (partial cb check)
-                    :delete (partial cb check))
+         "A user can watch a file for changes"
+         (watcher/watch file
+                        :create (partial cb check)
+                        :modify (partial cb check)
+                        :delete (partial cb check))
 
-        "Creating a file will be noticed"
-        (set-watching! check)
-        (fs/touch file)
-        (watching-for check path :create file) => true
+         "Creating a file will be noticed"
+         (set-watching! check)
+         (fs/touch file)
+         (watching-for check file :create file) => true
 
-        "Modifying a file will be noticed"
-        (set-watching! check)
-        (fs/touch file)
-        (watching-for check path :modify file) => true
+         "Modifying a file will be noticed"
+         (set-watching! check)
+         (fs/touch file)
+         (watching-for check file :modify file) => true
 
-        "Deleting a file will be noticed"
-        (set-watching! check)
-        (fs/delete file)
-        (watching-for check path :delete file) => true
+         "Deleting a file will be noticed"
+         (set-watching! check)
+         (fs/delete file)
+         (watching-for check file :delete file) => true
 
-        (unwatch-path path)))
+         (watcher/unwatch file)))

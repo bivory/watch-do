@@ -27,10 +27,10 @@
   [cmd cmd-opts path]
   (let [handler (partial handle-change cmd cmd-opts)]
     ;;(println "Watching" path "-->" cmd)
-    (watcher/watch-path path
-                        :create handler
-                        :delete handler
-                        :modify handler)))
+    (watcher/watch path
+                   :create handler
+                   :delete handler
+                   :modify handler)))
 
 (defn- add-group-watch-do
   [cmd cmd-opts group]

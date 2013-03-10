@@ -47,6 +47,11 @@
   (let [f (.toFile path)]
     (.isFile f)))
 
+(defn- directory?
+  [path]
+  (let [f (.toFile path)]
+    (.isDirectory f)))
+
 (defn- handle-watch-events
   [watch-key handlers]
   (let [events (.pollEvents watch-key)]
@@ -89,36 +94,73 @@
   [fs pathname]
   (.getPath fs pathname (make-array String 0)))
 
-(defn watch-path
-  "Start watching a path, and call the handlers if files
-   are created/modified/deleted in that directory.
+(defn- watch-file
+  [filename & {:as handlers}]
+  ;;(println "watch-file" filename handlers)
+  (let [watcher (get-or-create-watch-service)
+        fs (:fs @watch-stats)
+        path (get-path fs filename)
+        watch-events (->> handlers
+                          (map (comp kw-to-event first))
+                          into-array)
+        watch-type (if (directory? path) :path :file)
+        watch-dir (let [parent (get-file-parent-directory fs path)]
+                    (if (nil? parent)
+                      (throw (IllegalArgumentException. (str "Bad file:" filename)))
+                      parent))
+        watch-key (.register watch-dir watcher watch-events)]
+    (swap! watch-stats
+           assoc-in
+           [:watching-paths path]
+           {:handlers handlers :watch-key watch-key})
+    (start-watcher)))
+
+(defn- watch-path
+  [pathname & {:as handlers}]
+  ;;(println "watch-path" pathname handlers)
+  (let [watcher (get-or-create-watch-service)
+        fs (:fs @watch-stats)
+        path (get-path fs pathname)
+        watch-events (->> handlers
+                          (map (comp kw-to-event first))
+                          into-array)
+        watch-type (if (directory? path) :path :file)
+        watch-key (.register path watcher watch-events)]
+    (swap! watch-stats
+           assoc-in
+           [:watching-paths path]
+           {:handlers handlers :watch-key watch-key})
+    (start-watcher)))
+
+(defn watch
+  "Start watching a path and call the handlers if files
+   are created/modified/deleted in that directory or watch a file.
    If the watcher thread is not started, this function automatically
    starts it. The handlers are given via keyword args, currently supported
    keywords are `:create`, `:modify`, and `:delete`."
-  [pathname & {:as handlers}]
+  [pathname & handlers]
   (if (= (count handlers) 0)
     (throw (IllegalArgumentException. "No handlers specified."))
     (let [watcher (get-or-create-watch-service)
           fs (:fs @watch-stats)
           path (get-path fs pathname)
-          watch-events (->> handlers
-                            (map (comp kw-to-event first))
-                            into-array)
-          watch-dir (if (file? path)
-                      (let [parent (get-file-parent-directory fs path)]
-                        (if (nil? parent)
-                          (throw (IllegalArgumentException. (str "Bad path: " pathname)))
-                          parent))
-                      path)
-          ;;k (println "watching" path watch-dir)
-          watch-key (.register watch-dir watcher watch-events)]
-      (swap! watch-stats
-             assoc-in
-             [:watching-paths path]
-             {:handlers handlers :watch-key watch-key})
-      (start-watcher))))
+          watch-type (if (directory? path) :path :file)]
+      ;;(println "watching" watch-type path)
+      (if (= watch-type :path)
+        (apply watch-path pathname handlers)
+        (apply watch-file pathname handlers)))))
 
-(defn unwatch-path
+(defn- unwatch-file
+  "Stop watching a file"
+  [pathname]
+  (let [path (get-path (:fs @watch-stats) pathname)
+        {:keys [watch-key handlers]} (get-in @watch-stats
+                                             [:watching-paths path])]
+    (when watch-key
+      (cancel-watch-key watch-key handlers)
+      (swap! watch-stats update-in [:watching-paths] dissoc path))))
+
+(defn- unwatch-path
   "Stop watching a path"
   [pathname]
   (let [path (get-path (:fs @watch-stats) pathname)
@@ -127,6 +169,16 @@
     (when watch-key
       (cancel-watch-key watch-key handlers)
       (swap! watch-stats update-in [:watching-paths] dissoc path))))
+
+(defn unwatch
+  "Stop watching a path or file."
+  [pathname]
+  (let [fs (:fs @watch-stats)
+        path (get-path fs pathname)
+        watch-type (if (directory? path) :path :file)]
+    (if (= watch-type :path)
+      (unwatch-path pathname)
+      (unwatch-file pathname))))
 
 (defn stop-watchers
   "Close all the watching services and stop the polling threads"
