@@ -23,7 +23,8 @@
   [check parent-path ev path]
   ;;(println "watching for" ev path)
   (let [cb (:cb @check)]
-    (and (= (:ev @cb) ev)
+    (and (not= nil (deref cb 15000 nil))
+         (= (:ev @cb) ev)
          (= (str parent-path (:path @cb)) path))))
 
 (facts
@@ -32,8 +33,6 @@
             file (str path (fs/temp-name "tmp"))]
 
         "A user can unwatch a directory"
-        ;; TODO need to use a timeout
-        (comment
         (set-watching! check)
         (watch-path path
                     :create (partial cb check)
@@ -42,7 +41,7 @@
         (unwatch-path path)
         (fs/mkdir dir)
         (watching-for check path :create dir) => false
-        (fs/delete-dir dir))
+        (fs/delete-dir dir)
 
         "A user can watch a directory for changes"
         (watch-path path
