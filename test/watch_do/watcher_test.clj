@@ -27,7 +27,7 @@
          (= (:ev @cb) ev)
          (= (str parent-path (:path @cb)) path))))
 
-(facts
+(facts "About watching directories"
       (let [check (atom {})
             dir (str path (fs/temp-name "tmp-dir"))
             file (str path (fs/temp-name "tmp"))]
@@ -63,6 +63,44 @@
         (set-watching! check)
         (fs/touch file)
         (watching-for check path :create file) => true
+
+        "Deleting a file will be noticed"
+        (set-watching! check)
+        (fs/delete file)
+        (watching-for check path :delete file) => true
+
+        (unwatch-path path)))
+
+(facts "About watching files"
+      (let [check (atom {})
+            file (str path (fs/temp-name "tmp"))]
+
+        "A user can unwatch a file"
+        (set-watching! check)
+        (watch-path file
+                    :create (partial cb check)
+                    :modify (partial cb check)
+                    :delete (partial cb check))
+        (unwatch-path file)
+        (fs/touch file)
+        (watching-for check path :create file) => false
+        (fs/delete file)
+
+        "A user can watch a file for changes"
+        (watch-path file
+                    :create (partial cb check)
+                    :modify (partial cb check)
+                    :delete (partial cb check))
+
+        "Creating a file will be noticed"
+        (set-watching! check)
+        (fs/touch file)
+        (watching-for check path :create file) => true
+
+        "Modifying a file will be noticed"
+        (set-watching! check)
+        (fs/touch file)
+        (watching-for check path :modify file) => true
 
         "Deleting a file will be noticed"
         (set-watching! check)
