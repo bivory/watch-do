@@ -7,6 +7,7 @@
                           WatchService
                           WatchKey
                           WatchEvent)
+           (java.io File)
            (java.util.concurrent TimeUnit)))
 
 (def ^:private kw-to-event
@@ -23,7 +24,8 @@
 (def ^:private initial-stats {:watcher nil
                               :fs nil
                               :running false
-                              :watching-paths {}})
+                              :watching-paths {}
+                              :watching-files {}})
 (def ^:private watch-stats (atom initial-stats))
 
 (defn- get-or-create-watch-service
@@ -58,9 +60,10 @@
     (doseq [ev events]
       (let [kind (.kind ev)
             ctx (.context ev)
+            file (.toFile ctx)
             handler-key (event-to-kw kind)
             handler (handlers handler-key)]
-        (handler handler-key ctx)))
+        (handler handler-key file)))
     (.reset watch-key)))
 
 (defn- poll-events
@@ -70,10 +73,15 @@
                             TimeUnit/MINUTES)]
     (future
       (let [path (.watchable watch-key)
-            handlers (get-in @watch-stats
-                             [:watching-paths
-                              path
-                              :handlers])]
+            file-handlers (get-in @watch-stats
+                                  [:watching-files
+                                   path
+                                   :handlers])
+            path-handlers (get-in @watch-stats
+                                  [:watching-paths
+                                   path
+                                   :handlers])
+            handlers (if (nil? file-handlers) path-handlers file-handlers)]
         (handle-watch-events watch-key handlers)))))
 
 (defn- start-watcher
@@ -96,7 +104,6 @@
 
 (defn- watch-file
   [filename & {:as handlers}]
-  ;;(println "watch-file" filename handlers)
   (let [watcher (get-or-create-watch-service)
         fs (:fs @watch-stats)
         path (get-path fs filename)
@@ -108,16 +115,38 @@
                     (if (nil? parent)
                       (throw (IllegalArgumentException. (str "Bad file:" filename)))
                       parent))
-        watch-key (.register watch-dir watcher watch-events)]
+        watch-key (.register watch-dir watcher watch-events)
+        wrap-fn (fn [handler ev ctx]
+                  (let [full-path (-> (.toFile path) (.getCanonicalFile))
+                        full-ctx (-> (str (.getParent ctx)
+                                          watch-dir (File/separator)
+                                          (.getName ctx))
+                                     (File.)
+                                     (.getCanonicalFile))
+                        ;;temp (println "wrapped-handler event   " ev)
+                        ;;temp (println "wrapped-handler watch-dr" watch-dir)
+                        ;;temp (println "wrapped-handler ctx     " ctx)
+                        ;;temp (println "wrapped-handler full-ctx" full-ctx)
+                        ;;temp (println "wrapped-handler full-path" full-path)
+                        ;;temp1 (try
+                        ;;        (println "wrapped-handler2"
+                        ;;                 (.compareTo full-path full-ctx)
+                        ;;                 (.equals full-path full-ctx)
+                        ;;                 (= full-path full-ctx))
+                        ;;        (catch Exception e (println (.getMessage e))))
+                        ]
+                    (when (= full-path full-ctx) (handler ev ctx))))
+        wrapped-handlers (into {} (map (fn [[k v]] [k (partial wrap-fn v)]) handlers))]
     (swap! watch-stats
            assoc-in
-           [:watching-paths path]
-           {:handlers handlers :watch-key watch-key})
+           [:watching-files watch-dir]
+           {:handlers wrapped-handlers
+            :watch-key watch-key
+            :file-path path})
     (start-watcher)))
 
 (defn- watch-path
   [pathname & {:as handlers}]
-  ;;(println "watch-path" pathname handlers)
   (let [watcher (get-or-create-watch-service)
         fs (:fs @watch-stats)
         path (get-path fs pathname)
@@ -145,40 +174,22 @@
           fs (:fs @watch-stats)
           path (get-path fs pathname)
           watch-type (if (directory? path) :path :file)]
-      ;;(println "watching" watch-type path)
       (if (= watch-type :path)
         (apply watch-path pathname handlers)
         (apply watch-file pathname handlers)))))
-
-(defn- unwatch-file
-  "Stop watching a file"
-  [pathname]
-  (let [path (get-path (:fs @watch-stats) pathname)
-        {:keys [watch-key handlers]} (get-in @watch-stats
-                                             [:watching-paths path])]
-    (when watch-key
-      (cancel-watch-key watch-key handlers)
-      (swap! watch-stats update-in [:watching-paths] dissoc path))))
-
-(defn- unwatch-path
-  "Stop watching a path"
-  [pathname]
-  (let [path (get-path (:fs @watch-stats) pathname)
-        {:keys [watch-key handlers]} (get-in @watch-stats
-                                             [:watching-paths path])]
-    (when watch-key
-      (cancel-watch-key watch-key handlers)
-      (swap! watch-stats update-in [:watching-paths] dissoc path))))
 
 (defn unwatch
   "Stop watching a path or file."
   [pathname]
   (let [fs (:fs @watch-stats)
         path (get-path fs pathname)
-        watch-type (if (directory? path) :path :file)]
-    (if (= watch-type :path)
-      (unwatch-path pathname)
-      (unwatch-file pathname))))
+        watch-type (if (directory? path) :watching-paths :watching-files)
+        path (get-path (:fs @watch-stats) pathname)
+        {:keys [watch-key handlers]} (get-in @watch-stats
+                                             [watch-type path])]
+    (when watch-key
+      (cancel-watch-key watch-key handlers)
+      (swap! watch-stats update-in [watch-type] dissoc path))))
 
 (defn stop-watchers
   "Close all the watching services and stop the polling threads"
@@ -187,4 +198,5 @@
     (doseq [[_ {:keys [watch-key handlers]}] watching-paths]
       (cancel-watch-key watch-key handlers))
     (.close watcher)
-    (reset! watch-stats initial-stats)))
+    (reset! watch-stats initial-stats)
+    true))
