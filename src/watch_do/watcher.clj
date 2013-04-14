@@ -122,20 +122,8 @@
                                           watch-dir (File/separator)
                                           (.getName ctx))
                                      (File.)
-                                     (.getCanonicalFile))
-                        ;;temp (println "wrapped-handler event   " ev)
-                        ;;temp (println "wrapped-handler watch-dr" watch-dir)
-                        ;;temp (println "wrapped-handler ctx     " ctx)
-                        ;;temp (println "wrapped-handler full-ctx" full-ctx)
-                        ;;temp (println "wrapped-handler full-path" full-path)
-                        ;;temp1 (try
-                        ;;        (println "wrapped-handler2"
-                        ;;                 (.compareTo full-path full-ctx)
-                        ;;                 (.equals full-path full-ctx)
-                        ;;                 (= full-path full-ctx))
-                        ;;        (catch Exception e (println (.getMessage e))))
-                        ]
-                    (when (= full-path full-ctx) (handler ev ctx))))
+                                     (.getCanonicalFile))]
+                    (when (= full-path full-ctx) (handler ev full-ctx))))
         wrapped-handlers (into {} (map (fn [[k v]] [k (partial wrap-fn v)]) handlers))]
     (swap! watch-stats
            assoc-in
@@ -154,11 +142,19 @@
                           (map (comp kw-to-event first))
                           into-array)
         watch-type (if (directory? path) :path :file)
-        watch-key (.register path watcher watch-events)]
+        watch-key (.register path watcher watch-events)
+        wrap-fn (fn [handler ev ctx]
+                  (let [full-ctx (-> (str (.getParent ctx)
+                                          path (File/separator)
+                                          (.getName ctx))
+                                     (File.)
+                                     (.getCanonicalFile))]
+                    (handler ev full-ctx)))
+        wrapped-handlers (into {} (map (fn [[k v]] [k (partial wrap-fn v)]) handlers))]
     (swap! watch-stats
            assoc-in
            [:watching-paths path]
-           {:handlers handlers :watch-key watch-key})
+           {:handlers wrapped-handlers :watch-key watch-key})
     (start-watcher)))
 
 (defn watch

@@ -10,7 +10,7 @@
 (defn cb
   "Test helper that handles the callback when a watched path changes."
   [check ev ctx]
-  (println "saw" ev ctx)
+  ;; (println "saw" ev ctx)
   (let [event (:cb @check)]
     (deliver event {:ev ev :path ctx})))
 
@@ -23,13 +23,12 @@
   [check parent-path ev path]
   (let [cb (:cb @check)
         file (fs/file path)]
-    (println "watching for" ev path)
+    ;; (println "watching for" ev path)
     (and (not= nil (deref cb 15000 nil))
          (= (:ev @cb) ev)
-         ;; TODO (.equals (:path @cb) file)
-         )))
+         ;; (or (println "checking" (:path @cb) file) true)
+         (= (:path @cb) file))))
 
-(comment
 (facts "About watching directories"
        (let [check (atom {})
              dir (str path (fs/temp-name "directory-watch-dir"))
@@ -73,7 +72,6 @@
          (watching-for check path :delete file) => true
 
          (watcher/unwatch path)))
-)
 
 (facts "About watching files"
        (let [check (atom {})
