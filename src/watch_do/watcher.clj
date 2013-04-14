@@ -1,5 +1,6 @@
 (ns watch-do.watcher
   "Cloned from https://gist.github.com/moonranger/4023683"
+  (:require [clojure.pprint :as pp])
   (:import (java.nio.file FileSystems
                           Path
                           Paths
@@ -110,7 +111,6 @@
         watch-events (->> handlers
                           (map (comp kw-to-event first))
                           into-array)
-        watch-type (if (directory? path) :path :file)
         watch-dir (let [parent (get-file-parent-directory fs path)]
                     (if (nil? parent)
                       (throw (IllegalArgumentException. (str "Bad file:" filename)))
@@ -180,7 +180,9 @@
   (let [fs (:fs @watch-stats)
         path (get-path fs pathname)
         watch-type (if (directory? path) :watching-paths :watching-files)
-        path (get-path (:fs @watch-stats) pathname)
+        path (if (= watch-type :watching-files)
+               (get-file-parent-directory fs path)
+               (get-path (:fs @watch-stats) pathname))
         {:keys [watch-key handlers]} (get-in @watch-stats
                                              [watch-type path])]
     (when watch-key
